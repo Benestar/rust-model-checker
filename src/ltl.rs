@@ -16,7 +16,7 @@ pub enum Ltl<AP> {
 }
 
 #[derive(Debug)]
-pub enum Ltln<AP> {
+pub enum LtlNNF<AP> {
     True,
     False,
     Prop(AP),
@@ -46,77 +46,77 @@ impl<AP: fmt::Display> fmt::Display for Ltl<AP> {
     }
 }
 
-impl<AP: fmt::Display> fmt::Display for Ltln<AP> {
+impl<AP: fmt::Display> fmt::Display for LtlNNF<AP> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Ltln::True => write!(f, "true"),
-            Ltln::False => write!(f, "false"),
-            Ltln::Prop(a) => write!(f, "{}", a),
-            Ltln::NProp(a) => write!(f, "¬ {}", a),
-            Ltln::And(x, y) => write!(f, "({} ∧ {})", x, y),
-            Ltln::Or(x, y) => write!(f, "({} ∨ {})", x, y),
-            Ltln::Next(x) => write!(f, "(X {})", x),
-            Ltln::Until(x, y) => write!(f, "({} U {})", x, y),
-            Ltln::Release(x, y) => write!(f, "({} R {})", x, y),
+            LtlNNF::True => write!(f, "true"),
+            LtlNNF::False => write!(f, "false"),
+            LtlNNF::Prop(a) => write!(f, "{}", a),
+            LtlNNF::NProp(a) => write!(f, "¬ {}", a),
+            LtlNNF::And(x, y) => write!(f, "({} ∧ {})", x, y),
+            LtlNNF::Or(x, y) => write!(f, "({} ∨ {})", x, y),
+            LtlNNF::Next(x) => write!(f, "(X {})", x),
+            LtlNNF::Until(x, y) => write!(f, "({} U {})", x, y),
+            LtlNNF::Release(x, y) => write!(f, "({} R {})", x, y),
         }
     }
 }
 
 impl<AP> Ltl<AP> {
-    fn to_ltln_helper(self, b: bool) -> Ltln<AP> {
+    fn to_nnf_helper(self, b: bool) -> LtlNNF<AP> {
         match self {
-            Ltl::True => if b { Ltln::True } else { Ltln::False },
-            Ltl::False => if b { Ltln::False } else { Ltln::True },
-            Ltl::Prop(a) => if b { Ltln::Prop(a) } else { Ltln::NProp(a) },
-            Ltl::Not(x) => x.to_ltln_helper(!b),
+            Ltl::True => if b { LtlNNF::True } else { LtlNNF::False },
+            Ltl::False => if b { LtlNNF::False } else { LtlNNF::True },
+            Ltl::Prop(a) => if b { LtlNNF::Prop(a) } else { LtlNNF::NProp(a) },
+            Ltl::Not(x) => x.to_nnf_helper(!b),
             Ltl::And(x, y) => {
-                let xn = Box::new(x.to_ltln_helper(b));
-                let yn = Box::new(y.to_ltln_helper(b));
+                let xn = Box::new(x.to_nnf_helper(b));
+                let yn = Box::new(y.to_nnf_helper(b));
 
-                if b { Ltln::And(xn, yn) } else { Ltln::Or(xn, yn) }
+                if b { LtlNNF::And(xn, yn) } else { LtlNNF::Or(xn, yn) }
             },
             Ltl::Or(x, y) => {
-                let xn = Box::new(x.to_ltln_helper(b));
-                let yn = Box::new(y.to_ltln_helper(b));
+                let xn = Box::new(x.to_nnf_helper(b));
+                let yn = Box::new(y.to_nnf_helper(b));
 
-                if b { Ltln::Or(xn, yn) } else { Ltln::And(xn, yn) }
+                if b { LtlNNF::Or(xn, yn) } else { LtlNNF::And(xn, yn) }
             },
-            Ltl::Next(x) => Ltln::Next(Box::new(x.to_ltln_helper(b))),
+            Ltl::Next(x) => LtlNNF::Next(Box::new(x.to_nnf_helper(b))),
             Ltl::Finally(x) => {
-                let xn = Box::new(x.to_ltln_helper(b));
+                let xn = Box::new(x.to_nnf_helper(b));
 
                 if b {
-                    Ltln::Until(Box::new(Ltln::True), xn)
+                    LtlNNF::Until(Box::new(LtlNNF::True), xn)
                 } else {
-                    Ltln::Release(Box::new(Ltln::False), xn)
+                    LtlNNF::Release(Box::new(LtlNNF::False), xn)
                 }
             },
             Ltl::Globally(x) => {
-                let xn = Box::new(x.to_ltln_helper(b));
+                let xn = Box::new(x.to_nnf_helper(b));
 
                 if b {
-                    Ltln::Release(Box::new(Ltln::False), xn)
+                    LtlNNF::Release(Box::new(LtlNNF::False), xn)
                 } else {
-                    Ltln::Until(Box::new(Ltln::True), xn)
+                    LtlNNF::Until(Box::new(LtlNNF::True), xn)
                 }
             },
             Ltl::Until(x, y) => {
-                let xn = Box::new(x.to_ltln_helper(b));
-                let yn = Box::new(y.to_ltln_helper(b));
+                let xn = Box::new(x.to_nnf_helper(b));
+                let yn = Box::new(y.to_nnf_helper(b));
 
-                if b { Ltln::Until(xn, yn) } else { Ltln::Release(xn, yn) }
+                if b { LtlNNF::Until(xn, yn) } else { LtlNNF::Release(xn, yn) }
             },
             Ltl::Release(x, y) => {
-                let xn = Box::new(x.to_ltln_helper(b));
-                let yn = Box::new(y.to_ltln_helper(b));
+                let xn = Box::new(x.to_nnf_helper(b));
+                let yn = Box::new(y.to_nnf_helper(b));
 
-                if b { Ltln::Release(xn, yn) } else { Ltln::Until(xn, yn) }
+                if b { LtlNNF::Release(xn, yn) } else { LtlNNF::Until(xn, yn) }
             },
         }
     }
 
-    pub fn to_ltln(self) -> Ltln<AP> {
-        self.to_ltln_helper(false)
+    pub fn to_nnf(self) -> LtlNNF<AP> {
+        self.to_nnf_helper(false)
     }
 }
 
