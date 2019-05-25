@@ -65,58 +65,102 @@ impl<AP: fmt::Display> fmt::Display for LtlNNF<AP> {
 impl<AP> Ltl<AP> {
     fn to_nnf_helper(self, b: bool) -> LtlNNF<AP> {
         match self {
-            Ltl::True => if b { LtlNNF::True } else { LtlNNF::False },
-            Ltl::False => if b { LtlNNF::False } else { LtlNNF::True },
-            Ltl::Prop(a) => if b { LtlNNF::Prop(a) } else { LtlNNF::NProp(a) },
+            Ltl::True => {
+                if b {
+                    LtlNNF::False
+                } else {
+                    LtlNNF::True
+                }
+            }
+            Ltl::False => {
+                if b {
+                    LtlNNF::True
+                } else {
+                    LtlNNF::False
+                }
+            }
+            Ltl::Prop(a) => {
+                if b {
+                    LtlNNF::NProp(a)
+                } else {
+                    LtlNNF::Prop(a)
+                }
+            }
             Ltl::Not(x) => x.to_nnf_helper(!b),
             Ltl::And(x, y) => {
                 let xn = Box::new(x.to_nnf_helper(b));
                 let yn = Box::new(y.to_nnf_helper(b));
 
-                if b { LtlNNF::And(xn, yn) } else { LtlNNF::Or(xn, yn) }
-            },
+                if b {
+                    LtlNNF::Or(xn, yn)
+                } else {
+                    LtlNNF::And(xn, yn)
+                }
+            }
             Ltl::Or(x, y) => {
                 let xn = Box::new(x.to_nnf_helper(b));
                 let yn = Box::new(y.to_nnf_helper(b));
 
-                if b { LtlNNF::Or(xn, yn) } else { LtlNNF::And(xn, yn) }
-            },
+                if b {
+                    LtlNNF::And(xn, yn)
+                } else {
+                    LtlNNF::Or(xn, yn)
+                }
+            }
             Ltl::Next(x) => LtlNNF::Next(Box::new(x.to_nnf_helper(b))),
             Ltl::Finally(x) => {
                 let xn = Box::new(x.to_nnf_helper(b));
 
                 if b {
-                    LtlNNF::Until(Box::new(LtlNNF::True), xn)
+                    LtlNNF::globally(xn)
                 } else {
-                    LtlNNF::Release(Box::new(LtlNNF::False), xn)
+                    LtlNNF::finally(xn)
                 }
-            },
+            }
             Ltl::Globally(x) => {
                 let xn = Box::new(x.to_nnf_helper(b));
 
                 if b {
-                    LtlNNF::Release(Box::new(LtlNNF::False), xn)
+                    LtlNNF::finally(xn)
                 } else {
-                    LtlNNF::Until(Box::new(LtlNNF::True), xn)
+                    LtlNNF::globally(xn)
                 }
-            },
+            }
             Ltl::Until(x, y) => {
                 let xn = Box::new(x.to_nnf_helper(b));
                 let yn = Box::new(y.to_nnf_helper(b));
 
-                if b { LtlNNF::Until(xn, yn) } else { LtlNNF::Release(xn, yn) }
-            },
+                if b {
+                    LtlNNF::Release(xn, yn)
+                } else {
+                    LtlNNF::Until(xn, yn)
+                }
+            }
             Ltl::Release(x, y) => {
                 let xn = Box::new(x.to_nnf_helper(b));
                 let yn = Box::new(y.to_nnf_helper(b));
 
-                if b { LtlNNF::Release(xn, yn) } else { LtlNNF::Until(xn, yn) }
-            },
+                if b {
+                    LtlNNF::Until(xn, yn)
+                } else {
+                    LtlNNF::Release(xn, yn)
+                }
+            }
         }
     }
 
     pub fn to_nnf(self) -> LtlNNF<AP> {
         self.to_nnf_helper(false)
+    }
+}
+
+impl<AP> LtlNNF<AP> {
+    pub fn finally(x: Box<Self>) -> Self {
+        LtlNNF::Until(Box::new(LtlNNF::True), x)
+    }
+
+    pub fn globally(x: Box<Self>) -> Self {
+        LtlNNF::Release(Box::new(LtlNNF::False), x)
     }
 }
 
@@ -135,12 +179,14 @@ mod tests {
 
         let ltl = Ltl::Until(
             Box::new(Ltl::Prop(1)),
-            Box::new(Ltl::Release(Box::new(Ltl::Prop(2)), Box::new(Ltl::Prop(3))))
+            Box::new(Ltl::Release(Box::new(Ltl::Prop(2)), Box::new(Ltl::Prop(3)))),
         );
 
         assert_eq!("(1 U (2 R 3))", format!("{}", ltl));
 
-        let ltl = Ltl::Finally(Box::new(Ltl::Next(Box::new(Ltl::Not(Box::new(Ltl::Prop(3)))))));
+        let ltl = Ltl::Finally(Box::new(Ltl::Next(Box::new(Ltl::Not(Box::new(
+            Ltl::Prop(3),
+        ))))));
 
         assert_eq!("(F (X (¬ 3)))", format!("{}", ltl));
     }
