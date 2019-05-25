@@ -1,5 +1,8 @@
 use std::fmt;
 
+pub mod lexer;
+pub mod parser;
+
 #[derive(Debug)]
 pub enum Ltl<AP> {
     True,
