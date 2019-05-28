@@ -16,18 +16,92 @@ use std::str::Chars;
 ///
 /// The following tokens are supported:
 ///
-/// | Token type  | Allowed values
-/// | ----------- | --------------
-/// | Parentheses | `(`, `)`
-/// | Operators   | `&`, <code>\|</code>, `~`, `X`, `F`, `G`, `U`, `R`
-/// | Literals    | `true`, `false`, `1`, `0`
-/// | Variables   | `abc`, ...
-#[derive(Clone, Debug, PartialEq)]
+/// | Token type       | Allowed values
+/// | ---------------- | --------------
+/// | Parentheses      | `(`, `)`
+/// | Unary operators  | `~`, `X`, `F`, `G`
+/// | Binary Operators | `&`, <code>\|</code>, `U`, `R`
+/// | Literals         | `true`, `false`, `1`, `0`
+/// | Variables        | `abc`, ...
+#[derive(Debug, PartialEq)]
 pub enum LexItem {
-    Paren(char),
-    Op(char),
-    Lit(String),
+    Paren(Parenthesis),
+    UnOp(UnaryOperator),
+    BinOp(BinaryOperator),
+    Lit(Literal),
     Var(String),
+}
+
+#[derive(Debug, PartialEq)]
+pub enum Parenthesis {
+    Open,
+    Close,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum UnaryOperator {
+    Not,
+    Next,
+    Finally,
+    Globally,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum BinaryOperator {
+    And,
+    Or,
+    Until,
+    Release,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum Literal {
+    True,
+    False,
+}
+
+impl Parenthesis {
+    fn new(s: &str) -> Option<Self> {
+        match s {
+            "(" => Some(Parenthesis::Open),
+            ")" => Some(Parenthesis::Close),
+            _ => None,
+        }
+    }
+}
+
+impl UnaryOperator {
+    fn new(s: &str) -> Option<Self> {
+        match s {
+            "!" | "¬" | "~" => Some(UnaryOperator::Not),
+            "X" => Some(UnaryOperator::Next),
+            "F" | "<>" => Some(UnaryOperator::Finally),
+            "G" | "[]" => Some(UnaryOperator::Globally),
+            _ => None,
+        }
+    }
+}
+
+impl BinaryOperator {
+    fn new(s: &str) -> Option<Self> {
+        match s {
+            "&" | "∧" | "/\\" => Some(BinaryOperator::And),
+            "|" | "∨" | "\\/" => Some(BinaryOperator::Or),
+            "U" => Some(BinaryOperator::Until),
+            "R" => Some(BinaryOperator::Release),
+            _ => None,
+        }
+    }
+}
+
+impl Literal {
+    fn new(s: &str) -> Option<Self> {
+        match s {
+            "1" | "true" => Some(Literal::True),
+            "0" | "false" => Some(Literal::False),
+            _ => None,
+        }
+    }
 }
 
 /// Error on illegal character
@@ -39,8 +113,6 @@ pub struct LexerError {
     pos: usize,
     chr: char,
 }
-
-const LITERALS: [&str; 2] = ["true", "false"];
 
 /// Turn an input string into a list of tokens and their position.
 pub fn lex(input: &str) -> Result<Vec<(usize, LexItem)>, LexerError> {
@@ -56,10 +128,10 @@ pub fn lex(input: &str) -> Result<Vec<(usize, LexItem)>, LexerError> {
 
         let token = match c {
             'a'...'z' => {
-                let word = lex_word(&mut it);
+                let word = lex_lowercase_alphanumeric(&mut it);
 
-                if LITERALS.contains(&word.as_str()) {
-                    LexItem::Lit(word)
+                if let Some(lit) = Literal::new(&word) {
+                    LexItem::Lit(lit)
                 } else {
                     LexItem::Var(word)
                 }
@@ -67,17 +139,22 @@ pub fn lex(input: &str) -> Result<Vec<(usize, LexItem)>, LexerError> {
             '1' | '0' => {
                 it.next();
 
-                LexItem::Lit(c.to_string())
+                LexItem::Lit(Literal::new(&c.to_string()).unwrap())
             }
-            '&' | '|' | '~' | 'X' | 'F' | 'G' | 'U' | 'R' => {
+            '~' | 'X' | 'F' | 'G' => {
                 it.next();
 
-                LexItem::Op(c)
+                LexItem::UnOp(UnaryOperator::new(&c.to_string()).unwrap())
+            }
+            '&' | '|' | 'U' | 'R' => {
+                it.next();
+
+                LexItem::BinOp(BinaryOperator::new(&c.to_string()).unwrap())
             }
             '(' | ')' => {
                 it.next();
 
-                LexItem::Paren(c)
+                LexItem::Paren(Parenthesis::new(&c.to_string()).unwrap())
             }
             _ => return Err(LexerError { pos: i, chr: c }),
         };
@@ -88,7 +165,7 @@ pub fn lex(input: &str) -> Result<Vec<(usize, LexItem)>, LexerError> {
     Ok(result)
 }
 
-fn lex_word(it: &mut Peekable<Enumerate<Chars>>) -> String {
+fn lex_lowercase_alphanumeric(it: &mut Peekable<Enumerate<Chars>>) -> String {
     let mut token = String::new();
 
     while let Some(&(_, c)) = it.peek() {
@@ -105,8 +182,7 @@ fn lex_word(it: &mut Peekable<Enumerate<Chars>>) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::LexItem::*;
-    use super::{lex, LexerError};
+    use super::*;
 
     #[test]
     fn lex_ltl() {
@@ -116,71 +192,75 @@ mod tests {
 
         assert_eq!(
             lex("a_bc123 ").unwrap(),
-            vec![(0, Var("a_bc123".to_string()))]
+            vec![(0, LexItem::Var(String::from("a_bc123")))]
         );
 
         assert_eq!(
             lex("abc a\nb \t   c").unwrap(),
             vec![
-                (0, Var("abc".to_string())),
-                (4, Var("a".to_string())),
-                (6, Var("b".to_string())),
-                (12, Var("c".to_string())),
+                (0, LexItem::Var(String::from("abc"))),
+                (4, LexItem::Var(String::from("a"))),
+                (6, LexItem::Var(String::from("b"))),
+                (12, LexItem::Var(String::from("c"))),
             ]
         );
 
         assert_eq!(
             lex("true false trueee").unwrap(),
             vec![
-                (0, Lit("true".to_string())),
-                (5, Lit("false".to_string())),
-                (11, Var("trueee".to_string())),
+                (0, LexItem::Lit(Literal::True)),
+                (5, LexItem::Lit(Literal::False)),
+                (11, LexItem::Var(String::from("trueee"))),
             ]
         );
 
         assert_eq!(
             lex("11010").unwrap(),
             vec![
-                (0, Lit("1".to_string())),
-                (1, Lit("1".to_string())),
-                (2, Lit("0".to_string())),
-                (3, Lit("1".to_string())),
-                (4, Lit("0".to_string())),
+                (0, LexItem::Lit(Literal::True)),
+                (1, LexItem::Lit(Literal::True)),
+                (2, LexItem::Lit(Literal::False)),
+                (3, LexItem::Lit(Literal::True)),
+                (4, LexItem::Lit(Literal::False)),
             ]
         );
 
-        assert_eq!(lex("U").unwrap(), vec![(0, Op('U'))]);
+        assert_eq!(
+            lex("U").unwrap(),
+            vec![(0, LexItem::BinOp(BinaryOperator::Until))]
+        );
 
         assert_eq!(
             lex("())()").unwrap(),
             vec![
-                (0, Paren('(')),
-                (1, Paren(')')),
-                (2, Paren(')')),
-                (3, Paren('(')),
-                (4, Paren(')')),
+                (0, LexItem::Paren(Parenthesis::Open)),
+                (1, LexItem::Paren(Parenthesis::Close)),
+                (2, LexItem::Paren(Parenthesis::Close)),
+                (3, LexItem::Paren(Parenthesis::Open)),
+                (4, LexItem::Paren(Parenthesis::Close)),
             ]
         );
 
         assert_eq!(
             lex("a U (b & c)").unwrap(),
             vec![
-                (0, Var("a".to_string())),
-                (2, Op('U')),
-                (4, Paren('(')),
-                (5, Var("b".to_string())),
-                (7, Op('&')),
-                (9, Var("c".to_string())),
-                (10, Paren(')')),
+                (0, LexItem::Var(String::from("a"))),
+                (2, LexItem::BinOp(BinaryOperator::Until)),
+                (4, LexItem::Paren(Parenthesis::Open)),
+                (5, LexItem::Var(String::from("b"))),
+                (7, LexItem::BinOp(BinaryOperator::And)),
+                (9, LexItem::Var(String::from("c"))),
+                (10, LexItem::Paren(Parenthesis::Close)),
             ]
         );
 
         assert_eq!(
-            lex("xRy").unwrap(),
+            lex("xR~y").unwrap(),
             vec![
-                (0, Var("x".to_string())),
-                (1, Op('R')),
-                (2, Var("y".to_string())),
+                (0, LexItem::Var(String::from("x"))),
+                (1, LexItem::BinOp(BinaryOperator::Release)),
+                (2, LexItem::UnOp(UnaryOperator::Not)),
+                (3, LexItem::Var(String::from("y"))),
             ]
         );
     }
