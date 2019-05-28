@@ -23,7 +23,7 @@ use std::str::Chars;
 /// | Binary Operators | `&`, <code>\|</code>, `U`, `R`
 /// | Literals         | `true`, `false`, `1`, `0`
 /// | Variables        | `abc`, ...
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum LexItem {
     Paren(Parenthesis),
     UnOp(UnaryOperator),
@@ -32,13 +32,13 @@ pub enum LexItem {
     Var(String),
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Parenthesis {
     Open,
     Close,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum UnaryOperator {
     Not,
     Next,
@@ -46,7 +46,7 @@ pub enum UnaryOperator {
     Globally,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum BinaryOperator {
     And,
     Or,
@@ -54,7 +54,7 @@ pub enum BinaryOperator {
     Release,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Literal {
     True,
     False,
