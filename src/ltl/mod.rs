@@ -1,9 +1,10 @@
 use std::fmt;
+use std::iter;
 
 pub mod lexer;
 pub mod parser;
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Ltl<AP> {
     True,
     False,
@@ -18,7 +19,7 @@ pub enum Ltl<AP> {
     Release(Box<Self>, Box<Self>),
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum LtlNNF<AP> {
     True,
     False,
@@ -92,6 +93,46 @@ impl<AP> LtlNNF<AP> {
 
     pub fn release(x: Self, y: Self) -> Self {
         LtlNNF::Release(Box::new(x), Box::new(y))
+    }
+}
+
+impl<AP> Ltl<AP> {
+    pub fn subformulas<'a>(&'a self) -> Box<dyn Iterator<Item = &'a Ltl<AP>> + 'a> {
+        match self {
+            Ltl::Not(x) | Ltl::Next(x) | Ltl::Finally(x) | Ltl::Globally(x) => {
+                // chain subtree
+                Box::new(iter::once(self).chain(x.subformulas()))
+            }
+            Ltl::And(x, y) | Ltl::Or(x, y) | Ltl::Until(x, y) | Ltl::Release(x, y) => {
+                // chain both subtrees
+                Box::new(
+                    iter::once(self)
+                        .chain(x.subformulas())
+                        .chain(y.subformulas()),
+                )
+            }
+            _ => Box::new(iter::once(self)),
+        }
+    }
+}
+
+impl<AP> LtlNNF<AP> {
+    pub fn subformulas<'a>(&'a self) -> Box<dyn Iterator<Item = &'a LtlNNF<AP>> + 'a> {
+        match self {
+            LtlNNF::Next(x) => {
+                // chain subtree
+                Box::new(iter::once(self).chain(x.subformulas()))
+            }
+            LtlNNF::And(x, y) | LtlNNF::Or(x, y) | LtlNNF::Until(x, y) | LtlNNF::Release(x, y) => {
+                // chain both subtrees
+                Box::new(
+                    iter::once(self)
+                        .chain(x.subformulas())
+                        .chain(y.subformulas()),
+                )
+            }
+            _ => Box::new(iter::once(self)),
+        }
     }
 }
 
@@ -211,8 +252,8 @@ mod tests {
 
     #[test]
     fn ltl_fmt() {
-        assert_eq!("true", format!("{}", Ltl::<u32>::True));
-        assert_eq!("false", format!("{}", Ltl::<u32>::False));
+        assert_eq!("true", format!("{}", Ltl::<i32>::True));
+        assert_eq!("false", format!("{}", Ltl::<i32>::False));
 
         let ltl = Ltl::and(Ltl::Prop(1), Ltl::Prop(2));
 
@@ -225,5 +266,43 @@ mod tests {
         let ltl = Ltl::finally(Ltl::next(Ltl::not(Ltl::Prop(3))));
 
         assert_eq!("(F (X (¬ 3)))", format!("{}", ltl));
+    }
+
+    #[test]
+    fn ltl_subformulas() {
+        assert_eq!(
+            vec![&Ltl::<i32>::True],
+            Ltl::True.subformulas().collect::<Vec<_>>()
+        );
+
+        assert_eq!(
+            vec![&Ltl::Prop(1)],
+            Ltl::Prop(1).subformulas().collect::<Vec<_>>()
+        );
+
+        assert_eq!(
+            vec![&Ltl::not(Ltl::Prop(1)), &Ltl::Prop(1)],
+            Ltl::not(Ltl::Prop(1)).subformulas().collect::<Vec<_>>()
+        );
+
+        let p = Ltl::and(Ltl::Prop(1), Ltl::Prop(2));
+
+        assert_eq!(
+            vec![&p, &Ltl::Prop(1), &Ltl::Prop(2)],
+            p.subformulas().collect::<Vec<_>>()
+        );
+
+        let p = Ltl::until(Ltl::Prop(1), Ltl::Prop(2));
+        let q = Ltl::next(p.clone());
+
+        assert_eq!(
+            vec![&q, &p, &Ltl::Prop(1), &Ltl::Prop(2)],
+            q.subformulas().collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn ltl_nnf_subformulas() {
+        // TODO
     }
 }
