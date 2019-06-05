@@ -4,25 +4,46 @@ use std::collections::BTreeSet;
 use rust_model_checker::ltl_to_buechi::{LtlToNGBA, SimpleLtlToNGBA};
 use rust_model_checker::ltl::LtlNNF;
 use rust_model_checker::buechi::NGBA;
+use rust_model_checker::ltl::parser;
+
+use std::process;
+use std::env;
+use std::collections::HashSet;
 
 fn main() {
-    let ltl = LtlNNF::until(LtlNNF::Prop("a"), LtlNNF::Prop("b"));
+    let args: Vec<String> = env::args().collect();
+
+    if args.len() < 2 {
+        println!("Usage: ./rust_model_checker <ltl>");
+        process::exit(1);
+    }
+
+    let ltl = parser::parse_ltl(&args[1]).to_nnf();
 
     let ngba = SimpleLtlToNGBA.to_nba(&ltl);
 
-    let mut s1 = BTreeSet::new();
-    let mut s2 = BTreeSet::new();
-    let mut s3 = BTreeSet::new();
-    let mut s4 = BTreeSet::new();
+    let alphabet = ltl.subformulas().filter_map(|s| match s {
+        LtlNNF::Prop(a) | LtlNNF::NProp(a) => Some(a.clone()),
+        _ => None
+    }).collect::<HashSet<_>>();
 
-    s2.insert("a");
-    s3.insert("b");
-    s4.insert("a");
-    s4.insert("b");
+    let alphabet = alphabet.iter().collect::<Vec<_>>();
 
-    let alphabet = vec!["a", "b"];
+    let mut pppppp = Vec::new();
 
-    let engba = ngba.explore(&vec![s1, s2, s3, s4]);
+    for bits in 0..2usize.pow(alphabet.len() as u32) {
+        let mut set = BTreeSet::new();
+
+        for (i, &a) in alphabet.iter().enumerate() {
+            if (bits >> i) % 2 == 1 {
+                set.insert(a.clone());
+            }
+        }
+
+        pppppp.push(set);
+    }
+
+    let engba = ngba.explore(&pppppp);
 
     println!("HOA: v1");
     for init in engba.initial {
@@ -59,10 +80,10 @@ fn main() {
             println!("State: {} {{{}}}", p, engba.accepting.iter().enumerate().filter_map(|(i, a)| if a.contains(p) { Some(i.to_string()) } else { None }).collect::<Vec<_>>().join(" "));
         }
 
-        println!("[{}] {}", alphabet.iter().enumerate().map(|(i, a)| if s.contains(a) { i.to_string() } else { format!("!{}", i) } ).collect::<Vec<_>>().join("&"),q);
+        println!("[{}] {}", alphabet.iter().enumerate().map(|(i, &a)| if s.contains(a) { i.to_string() } else { format!("!{}", i) } ).collect::<Vec<_>>().join("&"),q);
     }
 
-    for i in last+1..last+5 {
+    for i in last+1..last+500 {
         println!("State: {} {{}}", i);
     }
 
