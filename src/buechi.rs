@@ -1,16 +1,16 @@
 use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
 
-pub struct NBA<Q, S> {
-    initial: HashSet<Q>,
-    trans: Box<Fn(&Q, &S) -> HashSet<Q>>,
-    accepting: Box<Fn(&Q) -> bool>,
+pub struct NGBA<'a, Q, S> {
+    pub initial: HashSet<Q>,
+    pub trans: Box<'a + Fn(&Q, &S) -> HashSet<Q>>,
+    pub accepting: Vec<Box<'a + Fn(&Q) -> bool>>,
 }
 
-pub struct ExplicitNBA<Q, S> {
-    initial: HashSet<Q>,
-    trans: HashSet<(Q, S, Q)>,
-    accepting: HashSet<Q>,
+pub struct ExplicitNGBA<Q, S> {
+    pub initial: HashSet<Q>,
+    pub trans: HashSet<(Q, S, Q)>,
+    pub accepting: Vec<HashSet<Q>>,
 }
 
 struct IndexPool<T> {
@@ -46,15 +46,15 @@ where
     }
 }
 
-impl<Q, S> NBA<Q, S>
+impl<'a, Q, S> NGBA<'a, Q, S>
 where
     Q: Eq + Hash + Clone,
     S: Eq + Hash + Clone,
 {
-    pub fn explore(&self, alphabet: &HashSet<S>) -> ExplicitNBA<usize, S> {
+    pub fn explore(&self, alphabet: &HashSet<S>) -> ExplicitNGBA<usize, S> {
         let mut initial = HashSet::new();
         let mut trans = HashSet::new();
-        let mut accepting = HashSet::new();
+        let mut accepting = Vec::new();
 
         let mut pool = IndexPool::new();
         let mut stack = Vec::new();
@@ -83,13 +83,19 @@ where
             }
         }
 
-        for (q, qi) in pool.iter() {
-            if (self.accepting)(q) {
-                accepting.insert(*qi);
+        for acc in self.accepting {
+            let set = HashSet::new();
+
+            for (q, qi) in pool.iter() {
+                if acc(q) {
+                    set.insert(*qi);
+                }
             }
+
+            accepting.push(set);
         }
 
-        ExplicitNBA {
+        ExplicitNGBA {
             initial,
             trans,
             accepting,
