@@ -1,13 +1,15 @@
 use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
+use std::fmt::Debug;
 
-pub struct NGBA<'a, Q, S> {
+pub struct NGBA<'a, Q: Hash + Eq, S> {
     pub initial: HashSet<Q>,
     pub trans: Box<'a + Fn(&Q, &S) -> HashSet<Q>>,
     pub accepting: Vec<Box<'a + Fn(&Q) -> bool>>,
 }
 
-pub struct ExplicitNGBA<Q, S> {
+#[derive(Debug)]
+pub struct ExplicitNGBA<Q: Hash + Eq, S: Hash + Eq> {
     pub initial: HashSet<Q>,
     pub trans: HashSet<(Q, S, Q)>,
     pub accepting: Vec<HashSet<Q>>,
@@ -46,12 +48,12 @@ where
     }
 }
 
-impl<'a, Q, S> NGBA<'a, Q, S>
+impl<'a, Q: Hash + Eq, S: Hash + Eq> NGBA<'a, Q, S>
 where
-    Q: Eq + Hash + Clone,
-    S: Eq + Hash + Clone,
+    Q: Eq + Hash + Clone + Debug,
+    S: Eq + Hash + Clone + Debug,
 {
-    pub fn explore(&self, alphabet: &HashSet<S>) -> ExplicitNGBA<usize, S> {
+    pub fn explore(&self, alphabet: &Vec<S>) -> ExplicitNGBA<usize, S> {
         let mut initial = HashSet::new();
         let mut trans = HashSet::new();
         let mut accepting = Vec::new();
@@ -72,6 +74,8 @@ where
 
             for s in alphabet {
                 for q in (self.trans)(&p, s) {
+                    dbg!((&p, &q));
+
                     if !pool.contains(&q) {
                         stack.push(q.clone());
                     }
@@ -83,8 +87,8 @@ where
             }
         }
 
-        for acc in self.accepting {
-            let set = HashSet::new();
+        for acc in self.accepting.iter() {
+            let mut set = HashSet::new();
 
             for (q, qi) in pool.iter() {
                 if acc(q) {

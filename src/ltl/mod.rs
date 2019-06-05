@@ -4,7 +4,7 @@ use std::iter;
 pub mod lexer;
 pub mod parser;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Ltl<AP> {
     True,
     False,
@@ -19,7 +19,7 @@ pub enum Ltl<AP> {
     Release(Box<Self>, Box<Self>),
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub enum LtlNNF<AP> {
     True,
     False,
