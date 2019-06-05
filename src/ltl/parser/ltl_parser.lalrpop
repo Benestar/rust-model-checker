@@ -1,0 +1,146 @@
+use std::str::FromStr;
+use super::Ltl;
+use super::Ltl::*;
+use super::BinOpcode;
+use super::UnOpcode;
+use super::bin_op;
+use super::un_op;
+
+grammar<AP> where AP: FromStr+Clone, AP::Err : std::fmt::Debug;
+
+pub Formula: Ltl<AP> = {
+    <f:Expression> => *f
+};
+
+pub Expression = {
+    <Or_expression>
+};
+
+pub Or_expression : Box<Ltl<AP>> = {
+    And_expression,
+    Or_expression Or And_expression => Box::new(bin_op(<>))
+}
+
+pub And_expression : Box<Ltl<AP>> = {
+    Binary_expression,
+    And_expression And Binary_expression => Box::new(bin_op(<>))
+}
+
+pub Binary_expression : Box<Ltl<AP>> = {
+    Unary_expression,
+    Unary_expression Bin_op Binary_expression => Box::new(bin_op(<>)),
+}
+
+pub Unary_expression : Box<Ltl<AP>> = {
+    Atom_expression,
+    Un_op Unary_expression => Box::new(un_op(<>))
+}
+
+Un_op = {
+    Not,
+    Finally,
+    Globally,
+    Next
+}
+
+Bin_op = {
+    Imp,
+    Biimp,
+    Xor,
+    Until,
+    W_until,
+    Release,
+    S_release
+}
+
+And : BinOpcode = {
+    "&&" => BinOpcode::And,
+    "&" => BinOpcode::And,
+    "AND" => BinOpcode::And
+}
+
+Or : BinOpcode = {
+    "||" => BinOpcode::Or,
+    "|" => BinOpcode::Or,
+    "OR" => BinOpcode::Or
+}
+
+Not : UnOpcode = {
+    "NOT" => UnOpcode::Not,
+    "!" => UnOpcode::Not
+}
+
+Finally : UnOpcode = {
+    "F" => UnOpcode::Finally
+}
+
+Globally : UnOpcode = {
+    "G" => UnOpcode::Globally
+}
+
+Next : UnOpcode = {
+    "X" => UnOpcode::Next
+}
+
+Imp : BinOpcode = {
+    "->" => BinOpcode::Imp,
+    "-->" => BinOpcode::Imp,
+    "=>" => BinOpcode::Imp,
+    "==>" => BinOpcode::Imp,
+    "IMP" => BinOpcode::Imp
+}
+
+Biimp : BinOpcode = {
+    "<->" => BinOpcode::Biimp,
+    "<=>" => BinOpcode::Biimp,
+    "BIIMP" => BinOpcode::Biimp
+}
+
+Xor : BinOpcode = {
+    "xor" => BinOpcode::Xor,
+    "XOR" => BinOpcode::Xor,
+    "^" => BinOpcode::Xor
+}
+
+Until : BinOpcode = {
+    "U" => BinOpcode::Until
+}
+
+W_until : BinOpcode = {
+    "W" => BinOpcode::WUntil
+}
+
+Release : BinOpcode = {
+    "R" => BinOpcode::Release
+}
+
+S_release : BinOpcode = {
+    "M" => BinOpcode::SRelease
+}
+
+pub Atom_expression : Box<Ltl<AP>> = {
+    Bool,
+    Variable,
+    "(" <Expression> ")"
+}
+
+pub Bool : Box<Ltl<AP>> = {
+    True,
+    False
+}
+
+pub True : Box<Ltl<AP>> = {
+    "true" => Box::new(True),
+    "tt" => Box::new(True),
+    "1" => Box::new(True),
+}
+
+pub False : Box<Ltl<AP>> = {
+    "false" => Box::new(False),
+    "ff" => Box::new(False),
+    "0" => Box::new(False),
+}
+
+Variable : Box<Ltl<AP>> = {
+    <s:r"[a-z][a-zA-Z0-9]*"> => Box::new(Prop(AP::from_str(s).unwrap()))
+}

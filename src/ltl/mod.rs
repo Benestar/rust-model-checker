@@ -1,9 +1,7 @@
 use std::fmt;
-
-pub mod lexer;
 pub mod parser;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Ltl<AP> {
     True,
     False,
