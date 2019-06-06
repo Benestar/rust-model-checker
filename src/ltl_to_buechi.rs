@@ -1,11 +1,11 @@
 use crate::buechi::NGBA;
 use crate::ltl::LtlNNF;
 use std::collections::{BTreeSet, HashSet};
-use std::hash::Hash;
 use std::fmt::Debug;
+use std::hash::Hash;
 
 pub trait LtlToNGBA<AP> {
-    type Q : Hash + Eq;
+    type Q: Hash + Eq;
     type S;
 
     fn to_nba<'a>(&self, ltl: &'a LtlNNF<AP>) -> NGBA<'a, Self::Q, Self::S>;
@@ -46,7 +46,7 @@ fn is_consistent<'a, AP: Ord + Clone>(ltl: &'a LtlNNF<AP>, set: &BTreeSet<LtlNNF
                 }
             }
             */
-            _ => ()
+            _ => (),
         }
     }
 
@@ -89,7 +89,12 @@ impl<'a, AP: Hash + Ord + Clone + Debug> ConsistentSetBuilder<'a, AP> {
         for bits in 0..2u128.pow(num as u32) {
             let mut foo: BTreeSet<LtlNNF<AP>> = self.require.iter().map(|&s| s.clone()).collect();
 
-            for (i, s) in self.ltl.subformulas().filter(|s| !self.require.contains(s) && !self.forbid.contains(s)).enumerate() {
+            for (i, s) in self
+                .ltl
+                .subformulas()
+                .filter(|s| !self.require.contains(s) && !self.forbid.contains(s))
+                .enumerate()
+            {
                 if (bits >> i) % 2 == 1 {
                     foo.insert(s.clone());
                 }
@@ -193,7 +198,10 @@ impl<AP: Hash + Ord + Clone + Debug> LtlToNGBA<AP> for SimpleLtlToNGBA {
 }
 
 impl<'a> SimpleLtlToNGBA {
-    fn initial<AP: Hash + Ord + Clone + Debug>(&self, ltl: &LtlNNF<AP>) -> HashSet<<Self as LtlToNGBA<AP>>::Q> {
+    fn initial<AP: Hash + Ord + Clone + Debug>(
+        &self,
+        ltl: &LtlNNF<AP>,
+    ) -> HashSet<<Self as LtlToNGBA<AP>>::Q> {
         let mut builder = ConsistentSetBuilder::new(ltl);
 
         builder.require(ltl);

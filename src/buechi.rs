@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
-use std::hash::Hash;
 use std::fmt::Debug;
+use std::hash::Hash;
 
 pub struct NGBA<'a, Q: Hash + Eq, S> {
     pub initial: HashSet<Q>,
@@ -13,6 +13,26 @@ pub struct ExplicitNGBA<Q: Hash + Eq, S: Hash + Eq> {
     pub initial: HashSet<Q>,
     pub trans: HashSet<(Q, S, Q)>,
     pub accepting: Vec<HashSet<Q>>,
+}
+
+struct Foo<'a, T> {
+    pool: HashMap<&'a T, usize>,
+    vec: Vec<&'a T>,
+}
+
+impl<'a, T> Foo<'a, T>
+where
+    T: Eq + Hash,
+{
+    pub fn get_or_insert(&mut self, t: &'a T) -> usize {
+        if self.pool.contains_key(t) {
+            *self.pool.get(t).unwrap()
+        } else {
+            self.vec.push(t);
+            self.pool.insert(t, self.pool.len());
+            self.pool.len() - 1
+        }
+    }
 }
 
 struct IndexPool<T> {
@@ -48,12 +68,21 @@ where
     }
 }
 
+impl<T> IntoIterator for IndexPool<T> {
+    type Item = (T, usize);
+    type IntoIter = <HashMap<T, usize> as IntoIterator>::IntoIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.pool.into_iter()
+    }
+}
+
 impl<'a, Q: Hash + Eq, S: Hash + Eq> NGBA<'a, Q, S>
 where
     Q: Eq + Hash + Clone + Debug,
     S: Eq + Hash + Clone + Debug,
 {
-    pub fn explore(&self, alphabet: &Vec<S>) -> ExplicitNGBA<usize, S> {
+    pub fn explore(&self, alphabet: &Vec<S>) -> (Vec<Q>, ExplicitNGBA<usize, S>) {
         let mut initial = HashSet::new();
         let mut trans = HashSet::new();
         let mut accepting = Vec::new();
@@ -99,10 +128,18 @@ where
             accepting.push(set);
         }
 
-        ExplicitNGBA {
+        let mut states: Vec<_> = pool.into_iter().collect();
+
+        states.sort_unstable_by_key(|(_, i)| *i);
+
+        let states: Vec<_> = states.into_iter().map(|(q, _)| q).collect();
+
+        let ngba = ExplicitNGBA {
             initial,
             trans,
             accepting,
-        }
+        };
+
+        (states, ngba)
     }
 }
