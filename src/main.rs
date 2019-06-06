@@ -20,6 +20,11 @@ fn main() {
 
     let ltl = parser::parse_ltl(&args[1]).to_nnf();
 
+    if ltl == LtlNNF::False {
+        print_false();
+        process::exit(0);
+    }
+
     let ngba = SimpleLtlToNGBA.to_nba(&ltl);
 
     let alphabet = ltl
@@ -144,8 +149,9 @@ fn main() {
             );
         }
 
-        println!(
-            "[{}] {}",
+        let cond = if alphabet.is_empty() {
+            String::from("t")
+        } else {
             alphabet
                 .iter()
                 .enumerate()
@@ -155,7 +161,12 @@ fn main() {
                     format!("!{}", i)
                 })
                 .collect::<Vec<_>>()
-                .join("&"),
+                .join("&")
+        };
+
+        println!(
+            "[{}] {}",
+            cond,
             q
         );
     }
@@ -179,5 +190,13 @@ fn main() {
         );
     }
 
+    println!("--END--");
+}
+
+fn print_false() {
+    println!("HOA: v1");
+    println!("AP: 0");
+    println!("Acceptance: 0 f");
+    println!("--BODY--");
     println!("--END--");
 }

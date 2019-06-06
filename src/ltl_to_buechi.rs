@@ -11,8 +11,10 @@ pub trait LtlToNGBA<AP> {
     fn to_nba<'a>(&self, ltl: &'a LtlNNF<AP>) -> NGBA<'a, Self::Q, Self::S>;
 }
 
-fn is_consistent<'a, AP: Ord + Clone>(ltl: &'a LtlNNF<AP>, set: &BTreeSet<LtlNNF<AP>>) -> bool {
-    for s in ltl.subformulas() {
+fn is_consistent<'a, AP: Ord + Clone + Hash>(ltl: &'a LtlNNF<AP>, set: &BTreeSet<LtlNNF<AP>>) -> bool {
+    let subformulas = ltl.subformulas().collect::<HashSet<_>>();
+
+    for s in subformulas.iter() {
         match s {
             LtlNNF::True => {
                 if !set.contains(s) {
@@ -34,18 +36,13 @@ fn is_consistent<'a, AP: Ord + Clone>(ltl: &'a LtlNNF<AP>, set: &BTreeSet<LtlNNF
                     return false;
                 }
             }
-            /*
-            LtlNNF::NProp(a) => {
-                if set.contains(s) == set.contains(&LtlNNF::Prop(a.clone())) {
-                    return false;
-                }
-            }
             LtlNNF::Prop(a) => {
-                if set.contains(s) == set.contains(&LtlNNF::NProp(a.clone())) {
-                    return false;
+                if let Some(t) = subformulas.iter().find(|t| if let LtlNNF::NProp(b) = t { a == b } else { false }) {
+                    if set.contains(s) == set.contains(t) {
+                        return false;
+                    }
                 }
             }
-            */
             _ => (),
         }
     }
