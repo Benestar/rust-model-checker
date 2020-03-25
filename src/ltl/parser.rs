@@ -67,6 +67,7 @@ pub fn parse(
             BinaryOperator::Or => Ltl::or(expr, expr2),
             BinaryOperator::Until => Ltl::until(expr, expr2),
             BinaryOperator::Release => Ltl::release(expr, expr2),
+            _ => return Err(ParserError),
         };
 
         Ok(expr)

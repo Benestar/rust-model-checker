@@ -17,6 +17,8 @@ pub enum Ltl<AP> {
     Globally(Box<Self>),
     Until(Box<Self>, Box<Self>),
     Release(Box<Self>, Box<Self>),
+    WeakUntil(Box<Self>, Box<Self>),
+    StrongRelease(Box<Self>, Box<Self>),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -30,6 +32,8 @@ pub enum LtlNNF<AP> {
     Next(Box<Self>),
     Until(Box<Self>, Box<Self>),
     Release(Box<Self>, Box<Self>),
+    WeakUntil(Box<Self>, Box<Self>),
+    StrongRelease(Box<Self>, Box<Self>),
 }
 
 impl<AP> Ltl<AP> {
@@ -64,6 +68,14 @@ impl<AP> Ltl<AP> {
     pub fn release(x: Self, y: Self) -> Self {
         Ltl::Release(Box::new(x), Box::new(y))
     }
+
+    pub fn weak_until(x: Self, y: Self) -> Self {
+        Ltl::WeakUntil(Box::new(x), Box::new(y))
+    }
+
+    pub fn strong_release(x: Self, y: Self) -> Self {
+        Ltl::StrongRelease(Box::new(x), Box::new(y))
+    }
 }
 
 impl<AP> LtlNNF<AP> {
@@ -94,6 +106,14 @@ impl<AP> LtlNNF<AP> {
     pub fn release(x: Self, y: Self) -> Self {
         LtlNNF::Release(Box::new(x), Box::new(y))
     }
+
+    pub fn weak_until(x: Self, y: Self) -> Self {
+        LtlNNF::WeakUntil(Box::new(x), Box::new(y))
+    }
+
+    pub fn strong_release(x: Self, y: Self) -> Self {
+        LtlNNF::StrongRelease(Box::new(x), Box::new(y))
+    }
 }
 
 impl<AP> Ltl<AP> {
@@ -103,7 +123,12 @@ impl<AP> Ltl<AP> {
                 // chain subtree
                 Box::new(iter::once(self).chain(x.subformulas()))
             }
-            Ltl::And(x, y) | Ltl::Or(x, y) | Ltl::Until(x, y) | Ltl::Release(x, y) => {
+            Ltl::And(x, y)
+            | Ltl::Or(x, y)
+            | Ltl::Until(x, y)
+            | Ltl::Release(x, y)
+            | Ltl::WeakUntil(x, y)
+            | Ltl::StrongRelease(x, y) => {
                 // chain both subtrees
                 Box::new(
                     iter::once(self)
@@ -123,7 +148,12 @@ impl<AP> LtlNNF<AP> {
                 // chain subtree
                 Box::new(iter::once(self).chain(x.subformulas()))
             }
-            LtlNNF::And(x, y) | LtlNNF::Or(x, y) | LtlNNF::Until(x, y) | LtlNNF::Release(x, y) => {
+            LtlNNF::And(x, y)
+            | LtlNNF::Or(x, y)
+            | LtlNNF::Until(x, y)
+            | LtlNNF::Release(x, y)
+            | LtlNNF::WeakUntil(x, y)
+            | LtlNNF::StrongRelease(x, y) => {
                 // chain both subtrees
                 Box::new(
                     iter::once(self)
@@ -150,6 +180,8 @@ impl<AP: fmt::Display> fmt::Display for Ltl<AP> {
             Ltl::Globally(x) => write!(f, "(G {})", x),
             Ltl::Until(x, y) => write!(f, "({} U {})", x, y),
             Ltl::Release(x, y) => write!(f, "({} R {})", x, y),
+            Ltl::WeakUntil(x, y) => write!(f, "({} W {})", x, y),
+            Ltl::StrongRelease(x, y) => write!(f, "({} M {})", x, y),
         }
     }
 }
@@ -166,6 +198,8 @@ impl<AP: fmt::Display> fmt::Display for LtlNNF<AP> {
             LtlNNF::Next(x) => write!(f, "(X {})", x),
             LtlNNF::Until(x, y) => write!(f, "({} U {})", x, y),
             LtlNNF::Release(x, y) => write!(f, "({} R {})", x, y),
+            LtlNNF::WeakUntil(x, y) => write!(f, "({} W {})", x, y),
+            LtlNNF::StrongRelease(x, y) => write!(f, "({} M {})", x, y),
         }
     }
 }
@@ -236,6 +270,20 @@ impl<AP> Ltl<AP> {
                     LtlNNF::until(x.to_nnf_helper(b), y.to_nnf_helper(b))
                 } else {
                     LtlNNF::release(x.to_nnf_helper(b), y.to_nnf_helper(b))
+                }
+            }
+            Ltl::WeakUntil(x, y) => {
+                if b {
+                    LtlNNF::strong_release(x.to_nnf_helper(b), y.to_nnf_helper(b))
+                } else {
+                    LtlNNF::weak_until(x.to_nnf_helper(b), y.to_nnf_helper(b))
+                }
+            }
+            Ltl::StrongRelease(x, y) => {
+                if b {
+                    LtlNNF::weak_until(x.to_nnf_helper(b), y.to_nnf_helper(b))
+                } else {
+                    LtlNNF::strong_release(x.to_nnf_helper(b), y.to_nnf_helper(b))
                 }
             }
         }
