@@ -1,5 +1,6 @@
 use super::lexer::*;
 use super::Ltl;
+use std::fmt;
 use std::iter::Peekable;
 
 /// Parse the given input string to an LTL formula.
@@ -7,15 +8,60 @@ pub fn parse(input: &str) -> ParserResult {
     Parser::new(Lexer::new(input.chars())).parse()
 }
 
+/// Define the precedence of operators
+trait Precedence {
+    fn precedence(&self) -> usize;
+}
+
+impl Precedence for UnaryOperator {
+    fn precedence(&self) -> usize {
+        80
+    }
+}
+
+impl Precedence for BinaryOperator {
+    fn precedence(&self) -> usize {
+        match self {
+            BinaryOperator::And => 20,
+            BinaryOperator::Or => 10,
+            BinaryOperator::Until => 30,
+            BinaryOperator::Release => 30,
+            BinaryOperator::WeakUntil => 30,
+            BinaryOperator::StrongRelease => 30,
+        }
+    }
+}
+
+/// The different errors that can occur during parsing
 #[derive(Debug)]
 pub enum ParserError {
     IllegalToken(Token),
-    MissingParenthesis,
+    MissingParenthesis(Token, Token),
     UnexpectedEOF,
 }
 
+impl fmt::Display for ParserError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ParserError::IllegalToken(token) => write!(
+                f,
+                "Illegal token found at {} (found {:?})",
+                token.position, token.item
+            ),
+            ParserError::MissingParenthesis(open, close) => write!(
+                f,
+                "Missing closing parenthesis for {} at {} (found {:?})",
+                open.position, close.position, close.item
+            ),
+            ParserError::UnexpectedEOF => write!(f, "Unexpected end of file"),
+        }
+    }
+}
+
+/// The result of the LTL parser
 pub type ParserResult = Result<Ltl<String>, ParserError>;
 
+/// Pratt parser for LTL formulas
 struct Parser<I: Iterator> {
     tokens: Peekable<I>,
 }
@@ -24,6 +70,7 @@ impl<I> Parser<I>
 where
     I: Iterator<Item = Token>,
 {
+    /// Create a new parser for the given token stream.
     pub fn new<T>(tokens: T) -> Self
     where
         T: IntoIterator<Item = Token, IntoIter = I>,
@@ -33,26 +80,39 @@ where
         }
     }
 
+    /// Parse the LTL formula.
     pub fn parse(&mut self) -> ParserResult {
-        let expr = self.parse_prefix()?;
+        self.parse_all(0)
+    }
+
+    fn parse_all(&mut self, precedence: usize) -> ParserResult {
+        let mut expr = self.parse_prefix()?;
 
         // Look-ahead for binary operators
-        if let Some(token) = self.tokens.peek() {
-            if let LexItem::BinOp(op) = token.item {
-                self.tokens.next().unwrap();
-
-                return self.parse_binary_operator(op, expr);
+        while precedence < self.get_precedence() {
+            if let LexItem::BinOp(op) = self.tokens.next().unwrap().item {
+                expr = self.parse_binary_operator(op, expr)?;
             }
         }
 
         Ok(expr)
     }
 
+    fn get_precedence(&mut self) -> usize {
+        if let Some(token) = self.tokens.peek() {
+            if let LexItem::BinOp(op) = token.item {
+                return op.precedence();
+            }
+        }
+
+        0
+    }
+
     fn parse_prefix(&mut self) -> ParserResult {
         let token = self.expect_token()?;
 
         match token.item {
-            LexItem::Paren(Parenthesis::Open) => self.parse_parenthesis(),
+            LexItem::Paren(Parenthesis::Open) => self.parse_parenthesis(token),
             LexItem::Lit(lit) => self.parse_literal(lit),
             LexItem::Var(var) => self.parse_variable(var),
             LexItem::UnOp(op) => self.parse_unary_operator(op),
@@ -60,15 +120,15 @@ where
         }
     }
 
-    fn parse_parenthesis(&mut self) -> ParserResult {
+    fn parse_parenthesis(&mut self, open: Token) -> ParserResult {
         let expr = self.parse()?;
 
-        let token = self.expect_token()?;
+        let close = self.expect_token()?;
 
-        if token.item == LexItem::Paren(Parenthesis::Close) {
+        if close.item == LexItem::Paren(Parenthesis::Close) {
             Ok(expr)
         } else {
-            Err(ParserError::MissingParenthesis)
+            Err(ParserError::MissingParenthesis(open, close))
         }
     }
 
@@ -86,7 +146,7 @@ where
     }
 
     fn parse_unary_operator(&mut self, op: UnaryOperator) -> ParserResult {
-        let inner = self.parse()?;
+        let inner = self.parse_all(op.precedence())?;
 
         let expr = match op {
             UnaryOperator::Not => Ltl::not(inner),
@@ -99,7 +159,7 @@ where
     }
 
     fn parse_binary_operator(&mut self, op: BinaryOperator, left: Ltl<String>) -> ParserResult {
-        let right = self.parse()?;
+        let right = self.parse_all(op.precedence() - 1)?;
 
         let expr = match op {
             BinaryOperator::And => Ltl::and(left, right),

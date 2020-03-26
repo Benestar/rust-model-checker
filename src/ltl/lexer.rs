@@ -10,7 +10,6 @@
 //! [`LexerError`]: struct.LexerError.html
 
 use std::iter::{Enumerate, Peekable};
-use std::str::Chars;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Token {
@@ -125,12 +124,12 @@ where
     I: Iterator<Item = char>,
 {
     /// Create a new Lexer from the given iterator.
-    pub fn new<T>(iterator: T) -> Self
+    pub fn new<T>(input: T) -> Self
     where
         T: IntoIterator<Item = char, IntoIter = I>,
     {
         Self {
-            iter: iterator.into_iter().enumerate().peekable(),
+            iter: input.into_iter().enumerate().peekable(),
         }
     }
 
@@ -251,8 +250,8 @@ mod tests {
         assert_eq!(
             vec,
             vec![Token {
+                item: LexItem::Var(String::from("a_bc123")),
                 position: 0,
-                item: LexItem::Var(String::from("a_bc123"))
             }]
         );
 
@@ -262,20 +261,20 @@ mod tests {
             vec,
             vec![
                 Token {
+                    item: LexItem::Var(String::from("abc")),
                     position: 0,
-                    item: LexItem::Var(String::from("abc"))
                 },
                 Token {
+                    item: LexItem::Var(String::from("a")),
                     position: 4,
-                    item: LexItem::Var(String::from("a"))
                 },
                 Token {
+                    item: LexItem::Var(String::from("b")),
                     position: 6,
-                    item: LexItem::Var(String::from("b"))
                 },
                 Token {
+                    item: LexItem::Var(String::from("c")),
                     position: 12,
-                    item: LexItem::Var(String::from("c"))
                 },
             ]
         );
@@ -286,16 +285,16 @@ mod tests {
             vec,
             vec![
                 Token {
+                    item: LexItem::Lit(Literal::True),
                     position: 0,
-                    item: LexItem::Lit(Literal::True)
                 },
                 Token {
+                    item: LexItem::Lit(Literal::False),
                     position: 5,
-                    item: LexItem::Lit(Literal::False)
                 },
                 Token {
+                    item: LexItem::Var(String::from("trueee")),
                     position: 11,
-                    item: LexItem::Var(String::from("trueee"))
                 },
             ]
         );
@@ -306,24 +305,24 @@ mod tests {
             vec,
             vec![
                 Token {
+                    item: LexItem::Lit(Literal::True),
                     position: 0,
-                    item: LexItem::Lit(Literal::True)
                 },
                 Token {
+                    item: LexItem::Lit(Literal::True),
                     position: 1,
-                    item: LexItem::Lit(Literal::True)
                 },
                 Token {
+                    item: LexItem::Lit(Literal::False),
                     position: 2,
-                    item: LexItem::Lit(Literal::False)
                 },
                 Token {
+                    item: LexItem::Lit(Literal::True),
                     position: 3,
-                    item: LexItem::Lit(Literal::True)
                 },
                 Token {
+                    item: LexItem::Lit(Literal::False),
                     position: 4,
-                    item: LexItem::Lit(Literal::False)
                 },
             ]
         );
@@ -333,8 +332,8 @@ mod tests {
         assert_eq!(
             vec,
             vec![Token {
+                item: LexItem::BinOp(BinaryOperator::Until),
                 position: 0,
-                item: LexItem::BinOp(BinaryOperator::Until)
             }]
         );
 
@@ -344,24 +343,24 @@ mod tests {
             vec,
             vec![
                 Token {
+                    item: LexItem::Paren(Parenthesis::Open),
                     position: 0,
-                    item: LexItem::Paren(Parenthesis::Open)
                 },
                 Token {
+                    item: LexItem::Paren(Parenthesis::Close),
                     position: 1,
-                    item: LexItem::Paren(Parenthesis::Close)
                 },
                 Token {
+                    item: LexItem::Paren(Parenthesis::Close),
                     position: 2,
-                    item: LexItem::Paren(Parenthesis::Close)
                 },
                 Token {
+                    item: LexItem::Paren(Parenthesis::Open),
                     position: 3,
-                    item: LexItem::Paren(Parenthesis::Open)
                 },
                 Token {
+                    item: LexItem::Paren(Parenthesis::Close),
                     position: 4,
-                    item: LexItem::Paren(Parenthesis::Close)
                 },
             ]
         );
@@ -372,32 +371,32 @@ mod tests {
             vec,
             vec![
                 Token {
+                    item: LexItem::Var(String::from("a")),
                     position: 0,
-                    item: LexItem::Var(String::from("a"))
                 },
                 Token {
+                    item: LexItem::BinOp(BinaryOperator::Until),
                     position: 2,
-                    item: LexItem::BinOp(BinaryOperator::Until)
                 },
                 Token {
+                    item: LexItem::Paren(Parenthesis::Open),
                     position: 4,
-                    item: LexItem::Paren(Parenthesis::Open)
                 },
                 Token {
+                    item: LexItem::Var(String::from("b")),
                     position: 5,
-                    item: LexItem::Var(String::from("b"))
                 },
                 Token {
+                    item: LexItem::BinOp(BinaryOperator::And),
                     position: 7,
-                    item: LexItem::BinOp(BinaryOperator::And)
                 },
                 Token {
+                    item: LexItem::Var(String::from("c")),
                     position: 9,
-                    item: LexItem::Var(String::from("c"))
                 },
                 Token {
+                    item: LexItem::Paren(Parenthesis::Close),
                     position: 10,
-                    item: LexItem::Paren(Parenthesis::Close)
                 },
             ]
         );
@@ -408,20 +407,20 @@ mod tests {
             vec,
             vec![
                 Token {
+                    item: LexItem::Var(String::from("x")),
                     position: 0,
-                    item: LexItem::Var(String::from("x"))
                 },
                 Token {
+                    item: LexItem::BinOp(BinaryOperator::Release),
                     position: 1,
-                    item: LexItem::BinOp(BinaryOperator::Release)
                 },
                 Token {
+                    item: LexItem::UnOp(UnaryOperator::Not),
                     position: 2,
-                    item: LexItem::UnOp(UnaryOperator::Not)
                 },
                 Token {
+                    item: LexItem::Var(String::from("y")),
                     position: 3,
-                    item: LexItem::Var(String::from("y"))
                 },
             ]
         );
@@ -431,8 +430,8 @@ mod tests {
         assert_eq!(
             vec,
             vec![Token {
+                item: LexItem::Unk("A".to_string()),
                 position: 0,
-                item: LexItem::Unk("A".to_string())
             }]
         );
 
@@ -441,8 +440,8 @@ mod tests {
         assert_eq!(
             vec,
             vec![Token {
+                item: LexItem::Unk("4abc".to_string()),
                 position: 0,
-                item: LexItem::Unk("4abc".to_string())
             }]
         );
 
@@ -452,20 +451,20 @@ mod tests {
             vec,
             vec![
                 Token {
+                    item: LexItem::Paren(Parenthesis::Open),
                     position: 0,
-                    item: LexItem::Paren(Parenthesis::Open)
                 },
                 Token {
+                    item: LexItem::Paren(Parenthesis::Open),
                     position: 1,
-                    item: LexItem::Paren(Parenthesis::Open)
                 },
                 Token {
+                    item: LexItem::Paren(Parenthesis::Open),
                     position: 2,
-                    item: LexItem::Paren(Parenthesis::Open)
                 },
                 Token {
+                    item: LexItem::Unk("24".to_string()),
                     position: 3,
-                    item: LexItem::Unk("24".to_string())
                 }
             ]
         );
