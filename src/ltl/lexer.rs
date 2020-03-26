@@ -14,8 +14,8 @@ use std::str::Chars;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Token {
-    item: LexItem,
-    position: usize,
+    pub item: LexItem,
+    pub position: usize,
 }
 
 /// Enumeration of different LTL tokens
@@ -120,13 +120,16 @@ pub struct Lexer<I: Iterator> {
     iter: Peekable<Enumerate<I>>,
 }
 
-impl<I: Iterator<Item = char>> Lexer<I> {
+impl<I> Lexer<I>
+where
+    I: Iterator<Item = char>,
+{
     /// Create a new Lexer from the given iterator.
     pub fn new<T>(iterator: T) -> Self
     where
         T: IntoIterator<Item = char, IntoIter = I>,
     {
-        Lexer {
+        Self {
             iter: iterator.into_iter().enumerate().peekable(),
         }
     }
@@ -213,7 +216,10 @@ impl<I: Iterator<Item = char>> Lexer<I> {
     }
 }
 
-impl<I: Iterator<Item = char>> Iterator for Lexer<I> {
+impl<I> Iterator for Lexer<I>
+where
+    I: Iterator<Item = char>,
+{
     type Item = Token;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -231,7 +237,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn lex_ltl() {
+    fn test_lexer() {
         let vec: Vec<_> = Lexer::new("".chars()).collect();
 
         assert_eq!(vec, vec![]);

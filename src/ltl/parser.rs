@@ -2,100 +2,151 @@ use super::lexer::*;
 use super::Ltl;
 use std::iter::Peekable;
 
+/// Parse the given input string to an LTL formula.
+pub fn parse(input: &str) -> ParserResult {
+    Parser::new(Lexer::new(input.chars())).parse()
+}
+
 #[derive(Debug)]
-pub struct ParserError;
+pub enum ParserError {
+    IllegalToken(Token),
+    MissingParenthesis,
+    UnexpectedEOF,
+}
 
-// Plan (recursive descent parser):
-//
-// - We first parse a full expression (recursively)
-// - Afterwards, we check whether it is followed by a binary operator
-// - If that is the case, we parse the binary operator and another full expression.
-// - After that we must return (and fail at the top-level if there are still tokens coming)
+pub type ParserResult = Result<Ltl<String>, ParserError>;
 
-pub fn parse(
-    stream: &mut Peekable<impl Iterator<Item = (usize, LexItem)>>,
-) -> Result<Ltl<String>, ParserError> {
-    let (i, token) = stream.next().ok_or(ParserError)?;
+struct Parser<I: Iterator> {
+    tokens: Peekable<I>,
+}
 
-    let expr = match token {
-        LexItem::Paren(Parenthesis::Open) => {
-            // parse expression
-            let expr = parse(stream)?;
-
-            // check for closing parenthesis
-            let (i, token) = stream.next().ok_or(ParserError)?;
-
-            if token != LexItem::Paren(Parenthesis::Close) {
-                return Err(ParserError);
-            }
-
-            expr
+impl<I> Parser<I>
+where
+    I: Iterator<Item = Token>,
+{
+    pub fn new<T>(tokens: T) -> Self
+    where
+        T: IntoIterator<Item = Token, IntoIter = I>,
+    {
+        Self {
+            tokens: tokens.into_iter().peekable(),
         }
-        LexItem::UnOp(op) => {
-            // parse expression
-            let expr = parse(stream)?;
+    }
 
-            // wrap in unary operator
-            match op {
-                UnaryOperator::Not => Ltl::not(expr),
-                UnaryOperator::Next => Ltl::next(expr),
-                UnaryOperator::Finally => Ltl::finally(expr),
-                UnaryOperator::Globally => Ltl::globally(expr),
+    pub fn parse(&mut self) -> ParserResult {
+        let expr = self.parse_prefix()?;
+
+        // Look-ahead for binary operators
+        if let Some(token) = self.tokens.peek() {
+            if let LexItem::BinOp(op) = token.item {
+                self.tokens.next().unwrap();
+
+                return self.parse_binary_operator(op, expr);
             }
         }
-        LexItem::Lit(literal) => {
-            // return literal
-            match literal {
-                Literal::True => Ltl::True,
-                Literal::False => Ltl::False,
-            }
+
+        Ok(expr)
+    }
+
+    fn parse_prefix(&mut self) -> ParserResult {
+        let token = self.expect_token()?;
+
+        match token.item {
+            LexItem::Paren(Parenthesis::Open) => self.parse_parenthesis(),
+            LexItem::Lit(lit) => self.parse_literal(lit),
+            LexItem::Var(var) => self.parse_variable(var),
+            LexItem::UnOp(op) => self.parse_unary_operator(op),
+            _ => Err(ParserError::IllegalToken(token)),
         }
-        LexItem::Var(var) => Ltl::Prop(var),
-        _ => return Err(ParserError),
-    };
+    }
 
-    // parse binary operator (and second expression)
-    if let Some(&(i, LexItem::BinOp(op))) = stream.peek() {
-        stream.next();
+    fn parse_parenthesis(&mut self) -> ParserResult {
+        let expr = self.parse()?;
 
-        // parse second expression
-        let expr2 = parse(stream)?;
+        let token = self.expect_token()?;
 
-        // wrap in binary operator
-        let expr = match op {
-            BinaryOperator::And => Ltl::and(expr, expr2),
-            BinaryOperator::Or => Ltl::or(expr, expr2),
-            BinaryOperator::Until => Ltl::until(expr, expr2),
-            BinaryOperator::Release => Ltl::release(expr, expr2),
-            _ => return Err(ParserError),
+        if token.item == LexItem::Paren(Parenthesis::Close) {
+            Ok(expr)
+        } else {
+            Err(ParserError::MissingParenthesis)
+        }
+    }
+
+    fn parse_literal(&mut self, lit: Literal) -> ParserResult {
+        let expr = match lit {
+            Literal::True => Ltl::True,
+            Literal::False => Ltl::False,
         };
 
         Ok(expr)
-    } else {
+    }
+
+    fn parse_variable(&mut self, var: String) -> ParserResult {
+        Ok(Ltl::Prop(var))
+    }
+
+    fn parse_unary_operator(&mut self, op: UnaryOperator) -> ParserResult {
+        let inner = self.parse()?;
+
+        let expr = match op {
+            UnaryOperator::Not => Ltl::not(inner),
+            UnaryOperator::Next => Ltl::next(inner),
+            UnaryOperator::Finally => Ltl::finally(inner),
+            UnaryOperator::Globally => Ltl::globally(inner),
+        };
+
         Ok(expr)
+    }
+
+    fn parse_binary_operator(&mut self, op: BinaryOperator, left: Ltl<String>) -> ParserResult {
+        let right = self.parse()?;
+
+        let expr = match op {
+            BinaryOperator::And => Ltl::and(left, right),
+            BinaryOperator::Or => Ltl::or(left, right),
+            BinaryOperator::Until => Ltl::until(left, right),
+            BinaryOperator::Release => Ltl::release(left, right),
+            BinaryOperator::WeakUntil => Ltl::weak_until(left, right),
+            BinaryOperator::StrongRelease => Ltl::strong_release(left, right),
+        };
+
+        Ok(expr)
+    }
+
+    fn expect_token(&mut self) -> Result<Token, ParserError> {
+        self.tokens.next().ok_or(ParserError::UnexpectedEOF)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::super::lexer::*;
     use super::super::Ltl;
     use super::parse;
 
     #[test]
-    fn parse_ltl() {
+    fn test_parse() {
         assert_eq!(
-            parse(
-                &mut vec![
-                    (0, LexItem::Var(String::from("a"))),
-                    (1, LexItem::BinOp(BinaryOperator::And)),
-                    (2, LexItem::Var(String::from("b"))),
-                ]
-                .into_iter()
-                .peekable()
-            )
-            .unwrap(),
+            parse("a & b").unwrap(),
             Ltl::and(Ltl::Prop(String::from("a")), Ltl::Prop(String::from("b")))
+        );
+
+        assert_eq!(
+            parse("F (a R b)").unwrap(),
+            Ltl::finally(Ltl::release(
+                Ltl::Prop(String::from("a")),
+                Ltl::Prop(String::from("b"))
+            ))
+        );
+
+        assert_eq!(
+            parse("a & b W c & d").unwrap(),
+            Ltl::and(
+                Ltl::Prop(String::from("a")),
+                Ltl::and(
+                    Ltl::weak_until(Ltl::Prop(String::from("b")), Ltl::Prop(String::from("c"))),
+                    Ltl::Prop(String::from("d"))
+                )
+            )
         );
     }
 }
