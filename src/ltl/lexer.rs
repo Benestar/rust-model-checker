@@ -9,33 +9,23 @@
 //! [`LexItem`]: enum.LexItem.html
 //! [`LexerError`]: struct.LexerError.html
 
+use std::fmt;
 use std::iter::{Enumerate, Peekable};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Token {
-    pub item: LexItem,
-    pub position: usize,
+    pub pos: usize,
+    pub val: String,
+    pub typ: TokenType,
 }
 
-/// Enumeration of different LTL tokens
-///
-/// The following tokens are supported:
-///
-/// | Token type       | Allowed values
-/// | ---------------- | --------------
-/// | Parentheses      | `(`, `)`
-/// | Unary operators  | `~`, `X`, `F`, `G`
-/// | Binary Operators | `&`, <code>\|</code>, `U`, `R`
-/// | Literals         | `true`, `false`, `1`, `0`
-/// | Variables        | `abc`, ...
 #[derive(Clone, Debug, PartialEq)]
-pub enum LexItem {
-    Paren(Parenthesis),
-    UnOp(UnaryOperator),
-    BinOp(BinaryOperator),
+pub enum TokenType {
+    Par(Parenthesis),
+    Op(Operator),
     Lit(Literal),
-    Var(String),
-    Unk(String),
+    Var,
+    Unk,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -45,17 +35,13 @@ pub enum Parenthesis {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub enum UnaryOperator {
+pub enum Operator {
     Not,
+    And,
+    Or,
     Next,
     Finally,
     Globally,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum BinaryOperator {
-    And,
-    Or,
     Until,
     Release,
     WeakUntil,
@@ -78,27 +64,19 @@ impl Parenthesis {
     }
 }
 
-impl UnaryOperator {
+impl Operator {
     fn new(s: &str) -> Option<Self> {
         match s {
-            "!" | "¬" | "~" => Some(UnaryOperator::Not),
-            "X" => Some(UnaryOperator::Next),
-            "F" | "<>" => Some(UnaryOperator::Finally),
-            "G" | "[]" => Some(UnaryOperator::Globally),
-            _ => None,
-        }
-    }
-}
-
-impl BinaryOperator {
-    fn new(s: &str) -> Option<Self> {
-        match s {
-            "&" | "∧" | "/\\" => Some(BinaryOperator::And),
-            "|" | "∨" | "\\/" => Some(BinaryOperator::Or),
-            "U" => Some(BinaryOperator::Until),
-            "R" => Some(BinaryOperator::Release),
-            "W" => Some(BinaryOperator::WeakUntil),
-            "M" => Some(BinaryOperator::StrongRelease),
+            "!" | "¬" | "~" => Some(Operator::Not),
+            "&" | "∧" | "/\\" => Some(Operator::And),
+            "|" | "∨" | "\\/" => Some(Operator::Or),
+            "X" | "()" => Some(Operator::Next),
+            "F" | "<>" => Some(Operator::Finally),
+            "G" | "[]" => Some(Operator::Globally),
+            "U" => Some(Operator::Until),
+            "R" => Some(Operator::Release),
+            "W" => Some(Operator::WeakUntil),
+            "M" => Some(Operator::StrongRelease),
             _ => None,
         }
     }
@@ -110,6 +88,59 @@ impl Literal {
             "1" | "true" => Some(Literal::True),
             "0" | "false" => Some(Literal::False),
             _ => None,
+        }
+    }
+}
+
+impl fmt::Display for Token {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "\"{}\" ({}) at pos {}", self.val, self.typ, self.pos)
+    }
+}
+
+impl fmt::Display for TokenType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            TokenType::Par(par) => par.fmt(f),
+            TokenType::Op(op) => op.fmt(f),
+            TokenType::Lit(lit) => lit.fmt(f),
+            TokenType::Var => write!(f, "variable"),
+            TokenType::Unk => write!(f, "unknown"),
+        }
+    }
+}
+
+impl fmt::Display for Literal {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Literal::True => write!(f, "true literal"),
+            Literal::False => write!(f, "false literal"),
+        }
+    }
+}
+
+impl fmt::Display for Parenthesis {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Parenthesis::Open => write!(f, "opening parenthesis"),
+            Parenthesis::Close => write!(f, "closing parenthesis"),
+        }
+    }
+}
+
+impl fmt::Display for Operator {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Operator::Not => write!(f, "not operator"),
+            Operator::And => write!(f, "and operator"),
+            Operator::Or => write!(f, "or operator"),
+            Operator::Next => write!(f, "next operator"),
+            Operator::Finally => write!(f, "finally operator"),
+            Operator::Globally => write!(f, "globally operator"),
+            Operator::Until => write!(f, "until operator"),
+            Operator::Release => write!(f, "release operator"),
+            Operator::WeakUntil => write!(f, "weak until operator"),
+            Operator::StrongRelease => write!(f, "strong release operator"),
         }
     }
 }
@@ -133,41 +164,56 @@ where
         }
     }
 
-    fn read_lex_item(&mut self, c: char) -> LexItem {
+    fn read_token(&mut self, c: char) -> (TokenType, String) {
         match c {
             'a'..='z' => {
-                let word = self.read_alphanumeric();
+                let val = self.read_alphanumeric();
 
-                if let Some(lit) = Literal::new(&word) {
-                    LexItem::Lit(lit)
+                let typ = if let Some(lit) = Literal::new(&val) {
+                    TokenType::Lit(lit)
                 } else {
-                    LexItem::Var(word)
-                }
+                    TokenType::Var
+                };
+
+                (typ, val)
             }
             '1' | '0' => {
                 self.iter.next();
 
-                LexItem::Lit(Literal::new(&c.to_string()).unwrap())
+                let val = c.to_string();
+                let typ = TokenType::Lit(Literal::new(&val).unwrap());
+
+                (typ, val)
             }
             '~' | 'X' | 'F' | 'G' => {
                 self.iter.next();
 
-                LexItem::UnOp(UnaryOperator::new(&c.to_string()).unwrap())
+                let val = c.to_string();
+                let typ = TokenType::Op(Operator::new(&val).unwrap());
+
+                (typ, val)
             }
             '&' | '|' | 'U' | 'R' | 'W' | 'M' => {
                 self.iter.next();
 
-                LexItem::BinOp(BinaryOperator::new(&c.to_string()).unwrap())
+                let val = c.to_string();
+                let typ = TokenType::Op(Operator::new(&val).unwrap());
+
+                (typ, val)
             }
             '(' | ')' => {
                 self.iter.next();
 
-                LexItem::Paren(Parenthesis::new(&c.to_string()).unwrap())
+                let val = c.to_string();
+                let typ = TokenType::Par(Parenthesis::new(&val).unwrap());
+
+                (typ, val)
             }
             _ => {
-                let unk = self.read_no_whitespace();
+                let val = self.read_no_whitespace();
+                let typ = TokenType::Unk;
 
-                LexItem::Unk(unk)
+                (typ, val)
             }
         }
     }
@@ -224,9 +270,10 @@ where
     fn next(&mut self) -> Option<Self::Item> {
         self.skip_whitespace();
 
-        self.iter.peek().copied().map(|(i, c)| Token {
-            item: self.read_lex_item(c),
-            position: i,
+        self.iter.peek().copied().map(|(pos, chr)| {
+            let (typ, val) = self.read_token(chr);
+
+            Token { typ, val, pos }
         })
     }
 }
@@ -250,8 +297,9 @@ mod tests {
         assert_eq!(
             vec,
             vec![Token {
-                item: LexItem::Var(String::from("a_bc123")),
-                position: 0,
+                typ: TokenType::Var,
+                pos: 0,
+                val: String::from("a_bc123"),
             }]
         );
 
@@ -261,20 +309,24 @@ mod tests {
             vec,
             vec![
                 Token {
-                    item: LexItem::Var(String::from("abc")),
-                    position: 0,
+                    typ: TokenType::Var,
+                    pos: 0,
+                    val: String::from("abc"),
                 },
                 Token {
-                    item: LexItem::Var(String::from("a")),
-                    position: 4,
+                    typ: TokenType::Var,
+                    pos: 4,
+                    val: String::from("a"),
                 },
                 Token {
-                    item: LexItem::Var(String::from("b")),
-                    position: 6,
+                    typ: TokenType::Var,
+                    pos: 6,
+                    val: String::from("b"),
                 },
                 Token {
-                    item: LexItem::Var(String::from("c")),
-                    position: 12,
+                    typ: TokenType::Var,
+                    pos: 12,
+                    val: String::from("c"),
                 },
             ]
         );
@@ -285,16 +337,19 @@ mod tests {
             vec,
             vec![
                 Token {
-                    item: LexItem::Lit(Literal::True),
-                    position: 0,
+                    typ: TokenType::Lit(Literal::True),
+                    pos: 0,
+                    val: String::from("true"),
                 },
                 Token {
-                    item: LexItem::Lit(Literal::False),
-                    position: 5,
+                    typ: TokenType::Lit(Literal::False),
+                    pos: 5,
+                    val: String::from("false"),
                 },
                 Token {
-                    item: LexItem::Var(String::from("trueee")),
-                    position: 11,
+                    typ: TokenType::Var,
+                    pos: 11,
+                    val: String::from("trueee"),
                 },
             ]
         );
@@ -305,24 +360,29 @@ mod tests {
             vec,
             vec![
                 Token {
-                    item: LexItem::Lit(Literal::True),
-                    position: 0,
+                    typ: TokenType::Lit(Literal::True),
+                    pos: 0,
+                    val: String::from("1"),
                 },
                 Token {
-                    item: LexItem::Lit(Literal::True),
-                    position: 1,
+                    typ: TokenType::Lit(Literal::True),
+                    pos: 1,
+                    val: String::from("1"),
                 },
                 Token {
-                    item: LexItem::Lit(Literal::False),
-                    position: 2,
+                    typ: TokenType::Lit(Literal::False),
+                    pos: 2,
+                    val: String::from("0"),
                 },
                 Token {
-                    item: LexItem::Lit(Literal::True),
-                    position: 3,
+                    typ: TokenType::Lit(Literal::True),
+                    pos: 3,
+                    val: String::from("1"),
                 },
                 Token {
-                    item: LexItem::Lit(Literal::False),
-                    position: 4,
+                    typ: TokenType::Lit(Literal::False),
+                    pos: 4,
+                    val: String::from("0"),
                 },
             ]
         );
@@ -332,8 +392,9 @@ mod tests {
         assert_eq!(
             vec,
             vec![Token {
-                item: LexItem::BinOp(BinaryOperator::Until),
-                position: 0,
+                typ: TokenType::Op(Operator::Until),
+                pos: 0,
+                val: String::from("U"),
             }]
         );
 
@@ -343,24 +404,29 @@ mod tests {
             vec,
             vec![
                 Token {
-                    item: LexItem::Paren(Parenthesis::Open),
-                    position: 0,
+                    typ: TokenType::Par(Parenthesis::Open),
+                    pos: 0,
+                    val: String::from("("),
                 },
                 Token {
-                    item: LexItem::Paren(Parenthesis::Close),
-                    position: 1,
+                    typ: TokenType::Par(Parenthesis::Close),
+                    pos: 1,
+                    val: String::from(")"),
                 },
                 Token {
-                    item: LexItem::Paren(Parenthesis::Close),
-                    position: 2,
+                    typ: TokenType::Par(Parenthesis::Close),
+                    pos: 2,
+                    val: String::from(")"),
                 },
                 Token {
-                    item: LexItem::Paren(Parenthesis::Open),
-                    position: 3,
+                    typ: TokenType::Par(Parenthesis::Open),
+                    pos: 3,
+                    val: String::from("("),
                 },
                 Token {
-                    item: LexItem::Paren(Parenthesis::Close),
-                    position: 4,
+                    typ: TokenType::Par(Parenthesis::Close),
+                    pos: 4,
+                    val: String::from(")"),
                 },
             ]
         );
@@ -371,32 +437,39 @@ mod tests {
             vec,
             vec![
                 Token {
-                    item: LexItem::Var(String::from("a")),
-                    position: 0,
+                    typ: TokenType::Var,
+                    pos: 0,
+                    val: String::from("a"),
                 },
                 Token {
-                    item: LexItem::BinOp(BinaryOperator::Until),
-                    position: 2,
+                    typ: TokenType::Op(Operator::Until),
+                    pos: 2,
+                    val: String::from("U"),
                 },
                 Token {
-                    item: LexItem::Paren(Parenthesis::Open),
-                    position: 4,
+                    typ: TokenType::Par(Parenthesis::Open),
+                    pos: 4,
+                    val: String::from("("),
                 },
                 Token {
-                    item: LexItem::Var(String::from("b")),
-                    position: 5,
+                    typ: TokenType::Var,
+                    pos: 5,
+                    val: String::from("b"),
                 },
                 Token {
-                    item: LexItem::BinOp(BinaryOperator::And),
-                    position: 7,
+                    typ: TokenType::Op(Operator::And),
+                    pos: 7,
+                    val: String::from("&"),
                 },
                 Token {
-                    item: LexItem::Var(String::from("c")),
-                    position: 9,
+                    typ: TokenType::Var,
+                    pos: 9,
+                    val: String::from("c"),
                 },
                 Token {
-                    item: LexItem::Paren(Parenthesis::Close),
-                    position: 10,
+                    typ: TokenType::Par(Parenthesis::Close),
+                    pos: 10,
+                    val: String::from(")"),
                 },
             ]
         );
@@ -407,20 +480,24 @@ mod tests {
             vec,
             vec![
                 Token {
-                    item: LexItem::Var(String::from("x")),
-                    position: 0,
+                    typ: TokenType::Var,
+                    pos: 0,
+                    val: String::from("x"),
                 },
                 Token {
-                    item: LexItem::BinOp(BinaryOperator::Release),
-                    position: 1,
+                    typ: TokenType::Op(Operator::Release),
+                    pos: 1,
+                    val: String::from("R"),
                 },
                 Token {
-                    item: LexItem::UnOp(UnaryOperator::Not),
-                    position: 2,
+                    typ: TokenType::Op(Operator::Not),
+                    pos: 2,
+                    val: String::from("~"),
                 },
                 Token {
-                    item: LexItem::Var(String::from("y")),
-                    position: 3,
+                    typ: TokenType::Var,
+                    pos: 3,
+                    val: String::from("y"),
                 },
             ]
         );
@@ -430,8 +507,9 @@ mod tests {
         assert_eq!(
             vec,
             vec![Token {
-                item: LexItem::Unk("A".to_string()),
-                position: 0,
+                typ: TokenType::Unk,
+                pos: 0,
+                val: String::from("A"),
             }]
         );
 
@@ -440,8 +518,9 @@ mod tests {
         assert_eq!(
             vec,
             vec![Token {
-                item: LexItem::Unk("4abc".to_string()),
-                position: 0,
+                typ: TokenType::Unk,
+                pos: 0,
+                val: String::from("4abc"),
             }]
         );
 
@@ -451,20 +530,24 @@ mod tests {
             vec,
             vec![
                 Token {
-                    item: LexItem::Paren(Parenthesis::Open),
-                    position: 0,
+                    typ: TokenType::Par(Parenthesis::Open),
+                    pos: 0,
+                    val: String::from("("),
                 },
                 Token {
-                    item: LexItem::Paren(Parenthesis::Open),
-                    position: 1,
+                    typ: TokenType::Par(Parenthesis::Open),
+                    pos: 1,
+                    val: String::from("("),
                 },
                 Token {
-                    item: LexItem::Paren(Parenthesis::Open),
-                    position: 2,
+                    typ: TokenType::Par(Parenthesis::Open),
+                    pos: 2,
+                    val: String::from("("),
                 },
                 Token {
-                    item: LexItem::Unk("24".to_string()),
-                    position: 3,
+                    typ: TokenType::Unk,
+                    pos: 3,
+                    val: String::from("24"),
                 }
             ]
         );
