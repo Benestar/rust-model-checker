@@ -3,8 +3,8 @@ use std::hash::Hash;
 
 pub struct NBA<Q, S> {
     initial: HashSet<Q>,
-    trans: Box<Fn(&Q, &S) -> HashSet<Q>>,
-    accepting: Box<Fn(&Q) -> bool>,
+    trans: Box<dyn Fn(&Q, &S) -> HashSet<Q>>,
+    accepting: Box<dyn Fn(&Q) -> bool>,
 }
 
 pub struct ExplicitNBA<Q, S> {
