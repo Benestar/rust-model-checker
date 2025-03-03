@@ -1,10 +1,26 @@
+//! LTL, short for Linear Temporal Logic, is a modal temporal logic.
+//!
+//! The [`Ltl`] enum represents a complete and redundant representation of LTL with all commonly known operators.
+//! It is parameterizes over the type of atomic propositions which are strings in the simplest case.
+//!
+//! The [`LtlNNF`] enum represents an LTL formula in negation-normal form. In this form, negation is only allowed
+//! on the level of atomic propositions.
+//!
+//! The modules [`lexer`] and [`parser`] allow parsing a string representation of LTL into the given datatype.
+//!
+//! [`Ltl`]: enum.Ltl.html
+//! [`LtlNNF`]: enum.LtlNNF.html
+
+// TODO switch from owned types to references for optimizations
+
 use std::fmt;
 use std::iter;
 
 pub mod lexer;
 pub mod parser;
 
-#[derive(Clone, Debug, PartialEq)]
+/// An LTL formula supporting all commonly known operators
+#[derive(Clone, Debug, PartialEq, Hash, Eq, PartialOrd, Ord)]
 pub enum Ltl<AP> {
     True,
     False,
@@ -21,7 +37,8 @@ pub enum Ltl<AP> {
     StrongRelease(Box<Self>, Box<Self>),
 }
 
-#[derive(Clone, Debug, PartialEq)]
+/// An LTL formula in negation-normal form, where negation is only allowed on the atomic propositions
+#[derive(Clone, Debug, PartialEq, Hash, Eq, PartialOrd, Ord)]
 pub enum LtlNNF<AP> {
     True,
     False,

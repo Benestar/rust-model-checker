@@ -1,13 +1,12 @@
 //! Lexer for LTL formulas
 //!
-//! The function [`lex`] turns an input string into a list of LTL tokens as
-//! described in the [`LexItem`] enum.
-//! On Error, a [`LexerError`] is returned with information about the illegal
-//! character.
+//! The [`Lexer`] struct takes an iterator over a sequence of characters and turns it into an iterator of LTL tokens,
+//! as defined in the [`Token`] struct. A token has a position, a string representation and a token type.
+//! The enum [`TokenType`] describes the various available types of tokens supported by the lexer.
 //!
-//! [`lex`]: fn.lex.html
-//! [`LexItem`]: enum.LexItem.html
-//! [`LexerError`]: struct.LexerError.html
+//! [`Lexer`]: struct.Lexer.html
+//! [`Token`]: struct.Token.html
+//! [`TokenType`]: enum.TokenType.html
 
 use std::fmt;
 use std::iter::{Enumerate, Peekable};
@@ -164,6 +163,7 @@ where
         }
     }
 
+    /// Read the next token and return its type and string representation.
     fn read_token(&mut self, c: char) -> (TokenType, String) {
         match c {
             'a'..='z' => {
@@ -210,7 +210,7 @@ where
                 (typ, val)
             }
             _ => {
-                let val = self.read_no_whitespace();
+                let val = self.read_until_whitespace();
                 let typ = TokenType::Unk;
 
                 (typ, val)
@@ -218,6 +218,7 @@ where
         }
     }
 
+    /// Read an alphanumeric value from the char stream.
     fn read_alphanumeric(&mut self) -> String {
         let mut token = String::new();
 
@@ -233,7 +234,8 @@ where
         token
     }
 
-    fn read_no_whitespace(&mut self) -> String {
+    /// Read characters until a whitespace character appears on the char stream.
+    fn read_until_whitespace(&mut self) -> String {
         let mut token = String::new();
 
         while let Some(&(_, c)) = self.iter.peek() {
@@ -249,6 +251,7 @@ where
         token
     }
 
+    /// Skip characters until a whitespace character appears on the char stream.
     fn skip_whitespace(&mut self) {
         while self
             .iter
