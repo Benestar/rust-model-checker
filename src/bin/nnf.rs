@@ -1,6 +1,6 @@
 extern crate rust_model_checker;
 
-use rust_model_checker::ltl::parser::parse;
+use rust_model_checker::ltl;
 use std::env;
 use std::process;
 
@@ -13,7 +13,7 @@ fn main() {
         process::exit(1);
     }
 
-    parse(&args[1]).map_or_else(
+    ltl::parser::parse(&args[1]).map_or_else(
         |error| eprintln!("Error: {}", error),
         |formula| println!("{}", formula.to_nnf()),
     );
